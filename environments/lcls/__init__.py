@@ -5,7 +5,7 @@ from badger import environment
 from badger.stats import percent_80
 from badger.errors import BadgerEnvObsError, BadgerInterfaceChannelError
 import logging
-from .fel import *
+from .fel import observables
 
 
 class Environment(environment.Environment):

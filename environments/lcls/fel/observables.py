@@ -2,13 +2,46 @@
 import logging
 import time
 from badger.stats import percent_80
+from typing import List
 from badger.errors import BadgerEnvObsError
 import numpy as np
 
 
-def get_intensity_n_loss(hxr, points, loss_pv, fel_channel, interface):
-    # At lcls the repetition is 120 Hz and the readout buf size is 2800.
-    # The last 120 entries correspond to pulse energies over past 1 second.
+def get_intensity_n_loss(hxr : bool, points : int, loss_pv : str, fel_channel : str, interface):
+    """
+    Gets intensity and loss data from interface and returns mean, median, p80, and standard deviation for intensity and p80 for loss.
+
+    Parameters
+    ----------
+    hxr : bool
+        Inticates hxr (True) or sxr (False) data
+    points : int
+        Number of data points
+    loss_pv : str
+        Pv name for loss data
+    fel_channel : str
+        Identifier for hxr gdet pv selection
+    interface
+        Specified beamline interface for getting values
+
+    Returns
+    -------
+    gas_p80 : float
+        80th percentile of intensity data
+    gas_mean : float
+        Mean of intensity data
+    gas_median : float
+        Median of intensity data
+    gas_std : float
+        Standard deviation of intensity data
+    loss_p80 : float
+        80th percentile of loss data
+
+    Notes
+    -----
+    At lcls the repetition is 120 Hz and the readout buf size is 2800.
+    The last 120 entries correspond to pulse energies over past 1 second.
+    """
 
     logging.info(f'Get value of {points} points')
 
@@ -30,7 +63,7 @@ def get_intensity_n_loss(hxr, points, loss_pv, fel_channel, interface):
     else:  # SXR
         PV_gas = 'EM1K0:GMD:HPS:milliJoulesPerPulseHSTCUSBR'
     try:
-        results_dict = self.interface.get_values([PV_gas, loss_pv])
+        results_dict = interface.get_values([PV_gas, loss_pv])
         intensity_raw = results_dict[PV_gas][-points:]
         loss_raw = results_dict[loss_pv][-points:]
         ind_valid = ~np.logical_or(np.isnan(intensity_raw), np.isnan(loss_raw))
@@ -53,7 +86,27 @@ def get_intensity_n_loss(hxr, points, loss_pv, fel_channel, interface):
 
             return gas, gas, gas, 0, 0
     
-def get_loss(points, loss_pv, interface):  # if only loss is observed
+def get_loss(points : int, loss_pv : str, interface):  # if only loss is observed
+    """
+    Gets loss data from the beamline interface and returns the 80th percentile of the data.
+
+    This funtion is used if only loss is observed
+
+    Parameters
+    ----------
+    points : int
+        Number of data points
+    loss_pv : str
+        Pv name for loss data
+    interface
+        Specified beamline interface for getting values
+
+    Returns
+    -------
+    loss_p80 : float
+        80th percentile of loss data
+
+    """
     logging.info(f'Get value of {points} points')
 
     try:
@@ -78,6 +131,19 @@ def get_loss(points, loss_pv, interface):  # if only loss is observed
     except Exception:  # we don't have scalar input for loss
         raise BadgerEnvObsError
 
-def is_pulse_intensity_observed(observable_names):
+def is_pulse_intensity_observed(observable_names : List[str]):
+    """
+    Returns the number of observables in observable_names which start with 'pulse_intensity'
+    
+    Parameters
+    ----------
+    observable_names : list
+        list of observables
+
+    Returns
+    -------
+    int
+        number of items in parameter list starting with 'pulse_instensity'
+    """
     return len([name for name in observable_names if
                 name.startswith('pulse_intensity')])
