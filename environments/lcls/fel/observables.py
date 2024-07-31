@@ -28,16 +28,18 @@ def get_intensity_and_loss(
 
     Returns
     -------
-    gas_p80 : float
-        80th percentile of intensity data
-    gas_mean : float
-        Mean of intensity data
-    gas_median : float
-        Median of intensity data
-    gas_std : float
-        Standard deviation of intensity data
-    loss_p80 : float
-        80th percentile of loss data
+    fel_stats : dict
+        A dictionary with the following keys and values:
+            'gas_p80' : float
+                80th percentile of intensity data
+            'gas_mean' : float
+                Mean of intensity data
+            'gas_median' : float
+                Median of intensity data
+            'gas_std' : float
+                Standard deviation of intensity data
+            'loss_p80' : float
+                80th percentile of loss data
 
     Notes
     -----
@@ -80,14 +82,30 @@ def get_intensity_and_loss(
 
         loss_p80 = percent_80(loss_valid)
 
-        return gas_p80, gas_mean, gas_median, gas_std, loss_p80
+        fel_stats = {
+            "gas_p80": gas_p80,
+            "gas_mean": gas_mean,
+            "gas_median": gas_median,
+            "gas_std": gas_std,
+            "loss_p80": loss_p80,
+        }
+
+        return fel_stats
     except Exception:  # if average fails use the scalar input
         if hxr:  # we don't have scalar input for HXR
             raise BadgerEnvObsError
         else:
             gas = interface.get_value("EM1K0:GMD:HPS:milliJoulesPerPulse")
 
-            return gas, gas, gas, 0, 0
+            fel_stats = {
+                "gas_p80": gas,
+                "gas_mean": gas,
+                "gas_median": gas,
+                "gas_std": 0,
+                "loss_p80": 0,
+            }
+
+            return fel_stats
 
 
 def get_loss(points: int, loss_pv: str, interface):  # if only loss is observed

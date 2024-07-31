@@ -181,15 +181,20 @@ class Environment(environment.Environment):
         observe_loss = self.is_beam_loss_observed(observable_names)
 
         if observe_gas:
-            intensity_p80, intensity_mean, intensity_median, intensity_std, loss_p80 = (
-                fel.observables.get_intensity_and_loss(
-                    hxr=self.hxr,
-                    points=self.points,
-                    loss_pv=self.loss_pv,
-                    fel_channel=self.fel_channel,
-                    interface=self.interface,
-                )
+            fel_stats = fel.observables.get_intensity_and_loss(
+                hxr=self.hxr,
+                points=self.points,
+                loss_pv=self.loss_pv,
+                fel_channel=self.fel_channel,
+                interface=self.interface,
             )
+
+            intensity_p80 = fel_stats["gas_p80"]
+            intensity_mean = fel_stats["gas_mean"]
+            intensity_median = fel_stats["gas_median"]
+            intensity_std = fel_stats["gas_std"]
+            loss_p80 = fel_stats["loss_p80"]
+
         elif observe_loss:
             loss_p80 = fel.observables.get_loss(
                 points=self.points, loss_pv=self.loss_pv, interface=self.interface
