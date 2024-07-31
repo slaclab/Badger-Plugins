@@ -182,7 +182,7 @@ class Environment(environment.Environment):
 
         if observe_gas:
             intensity_p80, intensity_mean, intensity_median, intensity_std, loss_p80 = (
-                fel.observables.get_intensity_n_loss(
+                fel.observables.get_intensity_and_loss(
                     hxr=self.hxr,
                     points=self.points,
                     loss_pv=self.loss_pv,

@@ -7,7 +7,7 @@ from badger.errors import BadgerEnvObsError
 from badger.stats import percent_80
 
 
-def get_intensity_n_loss(
+def get_intensity_and_loss(
     hxr: bool, points: int, loss_pv: str, fel_channel: str, interface
 ):
     """
