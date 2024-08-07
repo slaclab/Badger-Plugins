@@ -5,13 +5,13 @@ from badger import environment
 from badger.stats import percent_80
 from badger.errors import BadgerEnvObsError, BadgerInterfaceChannelError
 import logging
-from .variables import variables 
+from .variables import env_vars 
 
 
 class Environment(environment.Environment):
 
     name = 'lcls'
-    variables = variables.variables
+    variables = env_vars.variables
     observables = [
         'energy',
         'charge',
