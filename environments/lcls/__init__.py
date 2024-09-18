@@ -88,7 +88,7 @@ class Environment(environment.Environment):
     loss_pv: str = "LBLM:COL0:862:A:I0_LOSSHSTSCS"  # PV name for loss monitor
 
     use_check_var: bool = True  # if check var reaches the target value
-    check_var_timeout: float = 3.0  # tumeout for the var check
+    check_var_timeout: float = 3.0  # timeout for the var check
     trim_delay: float = 3.0  # in second
     check_fault_timeout: float = 5.0  # in second
 
@@ -170,6 +170,24 @@ class Environment(environment.Environment):
 
     def is_beam_loss_observed(self, observable_names):
         return "beam_loss" in observable_names
+    
+    def is_pulse_intensity_observed(observable_names: List[str]):
+        """
+        Returns the number of observables in observable_names which start with 'pulse_intensity'
+
+        Parameters
+        ----------
+        observable_names : list
+            list of observables
+
+        Returns
+        -------
+        int
+            number of items in parameter list starting with 'pulse_instensity'
+        """
+        return len(
+            [name for name in observable_names if name.startswith("pulse_intensity")]
+        )
 
     def get_observables(self, observable_names: List[str]) -> Dict:
         assert self.interface, "Must provide an interface!"

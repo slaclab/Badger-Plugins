@@ -153,22 +153,3 @@ def get_loss(points: int, loss_pv: str, interface):  # if only loss is observed
         return loss_p80
     except Exception:  # we don't have scalar input for loss
         raise BadgerEnvObsError
-
-
-def is_pulse_intensity_observed(observable_names: List[str]):
-    """
-    Returns the number of observables in observable_names which start with 'pulse_intensity'
-
-    Parameters
-    ----------
-    observable_names : list
-        list of observables
-
-    Returns
-    -------
-    int
-        number of items in parameter list starting with 'pulse_instensity'
-    """
-    return len(
-        [name for name in observable_names if name.startswith("pulse_intensity")]
-    )
