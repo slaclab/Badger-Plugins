@@ -131,16 +131,17 @@ class Environment(environment.Environment):
 
         self.interface.set_values(variable_inputs)
         self.check_variables(variable_inputs)
+        self.wait_settle_down()
+
+    def wait_settle_down(self):
+        if self.trim_delay:
+            time.sleep(self.trim_delay)  # extra time for stablizing orbits
 
     def check_variables(self, variable_inputs):
-        # If use_check_var is False, we simply sleep for trim_delay seconds
-        # else, we check if the variables have reached the target values, then
-        # sleep for trim_delay seconds
+        # Check if the variables have reached the target values
+        # Would do nothing if use_check_var is False
 
         if not self.use_check_var:
-            if self.trim_delay:
-                time.sleep(self.trim_delay)  # extra time for stablizing orbits
-
             return
 
         # For those STATCTRLSUB.T flag, 0 means settled, 1 means changing
@@ -182,9 +183,6 @@ class Environment(environment.Environment):
                 # raise RuntimeWarning("check var timeout exceeded")
                 break
         # TODO: add debug message to show how long it takes to settle
-
-        if self.trim_delay:
-            time.sleep(self.trim_delay)  # extra time for stablizing orbits
 
     def get_intensity_n_loss(self):
         # self.method
