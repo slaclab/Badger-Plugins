@@ -188,7 +188,6 @@ class Environment(environment.Environment):
                 break
         # Here is a lite and rough version of the above code
         # time.sleep(3.0)
-        # TODO: add debug message to show how long it takes to start changing
         logging.debug(f'check variables: detected variables changes: {time_elapsed:.2f}s')
 
         # Wait for magnets to settle
@@ -203,7 +202,6 @@ class Environment(environment.Environment):
             if time_elapsed > self.check_var_timeout:
                 # raise RuntimeWarning("check var timeout exceeded")
                 break
-        # TODO: add debug message to show how long it takes to settle
         logging.debug(f'check variables: variables settled down: {time_elapsed:.2f}s')
 
     def wait_for_buffer(self):
