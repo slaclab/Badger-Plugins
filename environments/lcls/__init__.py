@@ -145,27 +145,59 @@ class Environment(environment.Environment):
             return
 
         self.interface.set_values(variable_inputs)
+        self.check_variables(variable_inputs)
+        self.wait_settle_down()
+
+    def wait_settle_down(self):
+        if self.trim_delay:
+            time.sleep(self.trim_delay)  # extra time for stablizing orbits
+
+    def check_variables(self, variable_inputs):
+        # Check if the variables have reached the target values
+        # Would do nothing if use_check_var is False
 
         if not self.use_check_var:
-            if self.trim_delay:
-                time.sleep(self.trim_delay)  # extra time for stablizing orbits
-
             return
 
-        variable_ready_flags = [v[:v.rfind(':')] + ':STATCTRLSUB.T'
-                                for v in variable_inputs
-                                if v.endswith(':BCTRL')]
-        variable_status = self.interface.get_values(variable_ready_flags)
+        # For those STATCTRLSUB.T flag, 0 means settled, 1 means changing
+        variable_ready_flags = [
+            v[: v.rfind(":")] + ":STATCTRLSUB.T"
+            for v in variable_inputs
+            if v.endswith(":BCTRL")
+        ]
 
         time_start = time.time()
-        while np.any(np.array(variable_status.values())):
-            time.sleep(0.1 * np.random.rand())
+
+        # Wait for magnets to start changing
+        # Since there is a delay in the flag PV response,
+        # we wait for max 3 seconds
+        variable_status = self.interface.get_values(variable_ready_flags)
+
+        while not np.any(np.array(list(variable_status.values()))):
+            time.sleep(0.1)
+
+            variable_status = self.interface.get_values(variable_ready_flags)
+
+            time_elapsed = time.time() - time_start
+            if time_elapsed > self.check_var_timeout:  # or 3s?
+                break
+        # Here is a lite and rough version of the above code
+        # time.sleep(3.0)
+        # TODO: add debug message to show how long it takes to start changing
+
+        # Wait for magnets to settle
+        variable_status = self.interface.get_values(variable_ready_flags)
+
+        while np.any(np.array(list(variable_status.values()))):
+            time.sleep(0.1)
 
             variable_status = self.interface.get_values(variable_ready_flags)
 
             time_elapsed = time.time() - time_start
             if time_elapsed > self.check_var_timeout:
+                # raise RuntimeWarning("check var timeout exceeded")
                 break
+        # TODO: add debug message to show how long it takes to settle
 
     def get_intensity_n_loss(self):
         # At lcls the repetition is 120 Hz and the readout buf size is 2800.
