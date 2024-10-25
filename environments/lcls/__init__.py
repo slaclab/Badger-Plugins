@@ -116,7 +116,8 @@ class Environment(environment.Environment):
         for v in variable_names:
             if v.endswith(':BCTRL'):
                 prefix = v[:v.rfind(':')]
-                readback = prefix + ':BACT'
+                # readback = prefix + ':BACT'
+                readback = prefix + ':BCTRL'
             else:
                 readback = v
             channel_names.append(readback)
@@ -208,7 +209,8 @@ class Environment(environment.Environment):
             loss_p80 = percent_80(loss_valid)
 
             return gas_p80, gas_mean, gas_median, gas_std, loss_p80
-        except Exception:  # if average fails use the scalar input
+        except Exception as e:  # if average fails use the scalar input
+            raise e
             if hxr:  # we don't have scalar input for HXR
                 raise BadgerEnvObsError
             else:
@@ -254,7 +256,7 @@ class Environment(environment.Environment):
         assert self.interface, 'Must provide an interface!'
 
         # Make sure machine is not in a fault state
-        self.check_fault_status()
+        # self.check_fault_status()
 
         observe_gas = self.is_pulse_intensity_observed(observable_names)
         observe_loss = self.is_beam_loss_observed(observable_names)
