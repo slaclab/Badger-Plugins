@@ -72,6 +72,9 @@ class Environment(environment.Environment):
         'beamsize_y',
         'beamsize_r',
         'beamsize_g',
+        'pulse_intensity_p25',
+        'pulse_intensity_p50',
+        'pulse_intensity_p75',
         'pulse_intensity_p80',
         'pulse_intensity_mean',
         'pulse_intensity_median',
@@ -122,7 +125,8 @@ class Environment(environment.Environment):
         for v in variable_names:
             if v.endswith(':BCTRL'):
                 prefix = v[:v.rfind(':')]
-                readback = prefix + ':BACT'
+                # readback = prefix + ':BACT'
+                readback = prefix + ':BCTRL'
             else:
                 readback = v
             channel_names.append(readback)
@@ -150,62 +154,126 @@ class Environment(environment.Environment):
             return
 
         self.interface.set_values(variable_inputs)
+        self.check_variables(variable_inputs)
+        self.wait_settle_down()
+
+    def wait_settle_down(self):
+        if self.trim_delay:
+            logging.debug(f'Waiting for feedback settle down: {self.trim_delay}s')
+            time.sleep(self.trim_delay)  # extra time for stablizing orbits
+
+    def check_variables(self, variable_inputs):
+        # Check if the variables have reached the target values
+        # Would do nothing if use_check_var is False
 
         if not self.use_check_var:
-            if self.trim_delay:
-                time.sleep(self.trim_delay)  # extra time for stablizing orbits
-
             return
 
-        variable_ready_flags = [v[:v.rfind(':')] + ':STATCTRLSUB.T'
-                                for v in variable_inputs
-                                if v.endswith(':BCTRL')]
-        variable_status = self.interface.get_values(variable_ready_flags)
+        # For those STATCTRLSUB.T flag, 0 means settled, 1 means changing
+        variable_ready_flags = [
+            v[: v.rfind(":")] + ":STATCTRLSUB.T"
+            for v in variable_inputs
+            if v.endswith(":BCTRL")
+        ]
 
         time_start = time.time()
-        while np.any(np.array(variable_status.values())):
-            time.sleep(0.1 * np.random.rand())
+        logging.debug('check variables: started...')
+
+        # Wait for magnets to start changing
+        # Since there is a delay in the flag PV response,
+        # we wait for max 3 seconds
+        variable_status = self.interface.get_values(variable_ready_flags)
+
+        while not np.any(np.array(list(variable_status.values()))):
+            time.sleep(0.1)
+
+            variable_status = self.interface.get_values(variable_ready_flags)
+
+            time_elapsed = time.time() - time_start
+            if time_elapsed > self.check_var_timeout:  # or 3s?
+                break
+        # Here is a lite and rough version of the above code
+        # time.sleep(3.0)
+        logging.debug(f'check variables: detected variables changes: {time_elapsed:.2f}s')
+
+        # Wait for magnets to settle
+        variable_status = self.interface.get_values(variable_ready_flags)
+
+        while np.any(np.array(list(variable_status.values()))):
+            time.sleep(0.1)
 
             variable_status = self.interface.get_values(variable_ready_flags)
 
             time_elapsed = time.time() - time_start
             if time_elapsed > self.check_var_timeout:
+                # raise RuntimeWarning("check var timeout exceeded")
                 break
+        logging.debug(f'check variables: variables settled down: {time_elapsed:.2f}s')
 
-    def get_intensity_n_loss(self):
+    def wait_for_buffer(self):
         # At lcls the repetition is 120 Hz and the readout buf size is 2800.
         # The last 120 entries correspond to pulse energies over past 1 second.
-        hxr = self.hxr
 
         points = self.points
-        logging.info(f'Get value of {points} points')
+        logging.debug(f'Get value of {points} points')
 
         # Sleep for a while to get enough data
         try:
             rate = self.interface.get_value('EVNT:SYS0:1:LCLSBEAMRATE')
-            logging.info(f'Beam rate: {rate}')
+            logging.debug(f'Beam rate: {rate}')
             nap_time = points / (rate * 1.0)
+            logging.debug(f'Let\'s sleep {nap_time:.2f}s')
         except Exception as e:
             nap_time = 1
-            logging.warn(
+            logging.warning(
                 'Something went wrong with the beam rate calculation. Let\'s sleep 1 second.')
-            logging.warn(f'Exception was: {e}')
+            logging.warning(f'Exception was: {e}')
 
         time.sleep(nap_time)
+
+    def get_gas_PV(self):
+        hxr = self.hxr
 
         if hxr:
             PV_gas = f'GDET:FEE1:{self.fel_channel}:ENRCHSTCUHBR'
         else:  # SXR
             PV_gas = 'EM1K0:GMD:HPS:milliJoulesPerPulseHSTCUSBR'
-        PV_loss = self.loss_pv
-        try:
-            results_dict = self.interface.get_values([PV_gas, PV_loss])
-            intensity_raw = results_dict[PV_gas][-points:]
-            loss_raw = results_dict[PV_loss][-points:]
-            ind_valid = ~np.logical_or(np.isnan(intensity_raw), np.isnan(loss_raw))
-            intensity_valid = intensity_raw[ind_valid]
-            loss_valid = loss_raw[ind_valid]
 
+        return PV_gas
+
+    def get_intensity_n_loss_raw(self):
+        PV_gas = self.get_gas_PV()
+        PV_loss = self.loss_pv
+        points = self.points
+
+        results_dict = self.interface.get_values([PV_gas, PV_loss])
+        intensity_raw = results_dict[PV_gas][-points:]
+        loss_raw = results_dict[PV_loss][-points:]
+        ind_valid = ~np.logical_or(np.isnan(intensity_raw), np.isnan(loss_raw))
+        intensity_valid = intensity_raw[ind_valid]
+        loss_valid = loss_raw[ind_valid]
+
+        return intensity_raw, loss_raw, intensity_valid, loss_valid
+
+    def get_loss_raw(self):
+        PV_loss = self.loss_pv
+        points = self.points
+
+        loss_raw = self.interface.get_value(PV_loss)[-points:]
+        ind_valid = ~np.isnan(loss_raw)
+        loss_valid = loss_raw[ind_valid]
+
+        return loss_raw, loss_valid
+
+    def get_intensity_n_loss(self):
+        self.wait_for_buffer()
+
+        try:
+            _, _, intensity_valid, loss_valid = self.get_intensity_n_loss_raw()
+
+            gas_p25 = np.percentile(intensity_valid, 25)
+            gas_p50 = np.percentile(intensity_valid, 50)
+            gas_p75 = np.percentile(intensity_valid, 75)
             gas_p80 = percent_80(intensity_valid)
             gas_mean = np.mean(intensity_valid)
             gas_median = np.median(intensity_valid)
@@ -213,36 +281,22 @@ class Environment(environment.Environment):
 
             loss_p80 = percent_80(loss_valid)
 
-            return gas_p80, gas_mean, gas_median, gas_std, loss_p80
-        except Exception:  # if average fails use the scalar input
-            if hxr:  # we don't have scalar input for HXR
+            return (gas_p25, gas_p50, gas_p75, gas_p80,
+                    gas_mean, gas_median, gas_std, loss_p80)
+        except Exception as e:  # if average fails use the scalar input
+            raise e
+            if self.hxr:  # we don't have scalar input for HXR
                 raise BadgerEnvObsError
             else:
                 gas = self.interface.get_value('EM1K0:GMD:HPS:milliJoulesPerPulse')
 
-                return gas, gas, gas, 0, 0
+                return gas, gas, gas, gas, gas, gas, 0, 0
 
     def get_loss(self):  # if only loss is observed
-        points = self.points
-        logging.info(f'Get value of {points} points')
+        self.wait_for_buffer()
 
         try:
-            rate = self.interface.get_value('EVNT:SYS0:1:LCLSBEAMRATE')
-            logging.info(f'Beam rate: {rate}')
-            nap_time = points / (rate * 1.0)
-        except Exception as e:
-            nap_time = 1
-            logging.warn(
-                'Something went wrong with the beam rate calculation. Let\'s sleep 1 second.')
-            logging.warn(f'Exception was: {e}')
-
-        time.sleep(nap_time)
-
-        PV_loss = self.loss_pv
-        try:
-            loss_raw = self.interface.get_value(PV_loss)[-points:]
-            ind_valid = ~np.isnan(loss_raw)
-            loss_valid = loss_raw[ind_valid]
+            _, loss_valid = self.get_loss_raw()
             loss_p80 = percent_80(loss_valid)
 
             return loss_p80
@@ -260,13 +314,14 @@ class Environment(environment.Environment):
         assert self.interface, 'Must provide an interface!'
 
         # Make sure machine is not in a fault state
-        self.check_fault_status()
+        # self.check_fault_status()
 
         observe_gas = self.is_pulse_intensity_observed(observable_names)
         observe_loss = self.is_beam_loss_observed(observable_names)
 
         if observe_gas:
-            intensity_p80, intensity_mean, intensity_median, intensity_std, \
+            intensity_p25, intensity_p50, intensity_p75, intensity_p80, \
+                intensity_mean, intensity_median, intensity_std, \
                 loss_p80 = self.get_intensity_n_loss()
         elif observe_loss:
             loss_p80 = self.get_loss()
@@ -296,6 +351,12 @@ class Environment(environment.Environment):
                 value = np.sqrt(bs_x * bs_y)
             elif obs == 'beam_loss':
                 value = loss_p80
+            elif obs == 'pulse_intensity_p25':
+                value = intensity_p25
+            elif obs == 'pulse_intensity_p50':
+                value = intensity_p50
+            elif obs == 'pulse_intensity_p75':
+                value = intensity_p75
             elif obs == 'pulse_intensity_p80':
                 value = intensity_p80
             elif obs == 'pulse_intensity_mean':
@@ -312,6 +373,8 @@ class Environment(environment.Environment):
                 value = None
 
             observable_outputs[obs] = value
+
+        logging.debug(f'get_observables: {observable_outputs}')
 
         return observable_outputs
 
@@ -425,9 +488,9 @@ class Environment(environment.Environment):
             system_states.update(states_quads)
             system_states.update(states_extra)
         except Exception as e:
-            logging.warn(
+            logging.warning(
                 'Failed to get system states, will not save the requested system states.')
-            logging.warn(f'Exception was: {e}')
+            logging.warning(f'Exception was: {e}')
 
             system_states = None
 
